@@ -1,6 +1,6 @@
 # InvestView - 투자 도우미 앱
 
-10일 이동평균선 교차 전략을 기반으로 매수/매도 신호를 자동 감지하는 투자 도우미 앱입니다.
+10일 이동평균선 교차 전략을 기반으로 매수/매도 신호를 자동 감지하는 투자 도우미 PWA 앱입니다.
 
 ## 주요 기능
 
@@ -8,80 +8,62 @@
 - **포트폴리오 대시보드** — 총 평가금액, 수익률, 보유종목 현황
 - **차트 분석** — 종가 + 10일 이동평균선 차트, 매매 신호 표시
 - **매매 신호** — MA 교차 시 자동 매수/매도 알림
-- **모바일 최적화** — iPhone/Android에서 네이티브 앱처럼 사용 가능
+- **PWA** — 홈 화면 설치, 오프라인 지원, 전체화면 앱 모드
+- **모바일 최적화** — iPhone/Android에서 네이티브 앱처럼 사용
 
-## 로컬 실행 방법
-
-Node.js (18+)가 설치되어 있어야 합니다.
+## 로컬 실행
 
 ```bash
-# 1. 의존성 설치
 npm install
-
-# 2. 개발 서버 실행
 npm run dev
-
-# 3. 브라우저에서 열기
-# http://localhost:3000
+# → http://localhost:3000
 ```
 
-## Vercel 배포 (친구에게 공유하기)
+## 배포 (친구에게 공유하기)
 
-### 방법 1: Vercel CLI (가장 빠름)
+### GitHub + Vercel (추천)
+
+1. GitHub에 코드를 push합니다
+2. [vercel.com](https://vercel.com) 접속 → "New Project" → GitHub 저장소 연결
+3. "Deploy" 클릭 → 완료!
+4. `your-app.vercel.app` URL을 친구에게 공유
+
+### Vercel CLI
 
 ```bash
-# 1. Vercel CLI 설치
 npm install -g vercel
-
-# 2. 배포
 vercel
-
-# 3. 완료! URL이 생성됩니다 (예: investview-abc123.vercel.app)
 ```
 
-### 방법 2: GitHub + Vercel (추천)
+## iPhone에 앱 설치하기
 
-```bash
-# 1. GitHub 저장소 생성 후 코드 푸시
-git init
-git add .
-git commit -m "Initial commit"
-git remote add origin https://github.com/YOUR_USERNAME/investview.git
-git push -u origin main
-
-# 2. vercel.com 접속 → "New Project" → GitHub 저장소 연결
-# 3. "Deploy" 클릭 → 완료!
-```
-
-### 방법 3: Netlify
-
-```bash
-# 1. 빌드
-npm run build
-
-# 2. netlify.com 접속 → dist 폴더를 드래그 앤 드롭
-```
-
-## iPhone 홈 화면에 추가하기
-
-배포 후 iPhone Safari에서 URL 접속 → 공유 버튼(⬆️) → "홈 화면에 추가" → 네이티브 앱처럼 사용!
+1. 배포된 URL을 iPhone Safari에서 열기
+2. 하단 공유 버튼(⬆️) 탭
+3. "홈 화면에 추가" 선택
+4. 네이티브 앱처럼 전체화면으로 사용!
 
 ## 기술 스택
 
 - React 18 + Vite
-- Recharts (차트)
+- Recharts (차트 라이브러리)
+- PWA (Service Worker + Web App Manifest)
 - 반응형 디자인 (모바일 우선)
 
 ## 프로젝트 구조
 
 ```
-investview/
-├── index.html          # 진입 HTML
-├── package.json        # 의존성
-├── vite.config.js      # Vite 설정
+investment-helper/
+├── index.html            # PWA 등록 포함 진입 HTML
+├── package.json
+├── vite.config.js
 ├── public/
-│   └── favicon.svg     # 앱 아이콘
+│   ├── favicon.svg
+│   ├── manifest.json     # PWA 매니페스트
+│   ├── sw.js             # Service Worker (오프라인)
+│   └── icons/
+│       ├── icon-192.png
+│       └── icon-512.png
 └── src/
-    ├── main.jsx        # React 진입점
-    └── App.jsx         # 메인 앱 컴포넌트
+    ├── main.jsx
+    └── App.jsx           # 메인 앱 (관심종목 + 대시보드 + 차트)
 ```

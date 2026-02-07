@@ -125,6 +125,29 @@ export default function InvestmentHelper() {
   const [view, setView] = useState("dashboard");
   const [alerts, setAlerts] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
+  // ─── PWA Install Prompt ─────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+      setShowInstallBanner(true);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === "accepted") {
+      setShowInstallBanner(false);
+      setInstallPrompt(null);
+    }
+  };
 
   // ─── Watchlist toggle ───────────────────────────────────────────
   const toggleWatchlist = (symbol) => {
@@ -799,6 +822,36 @@ export default function InvestmentHelper() {
               fontSize: "14px", cursor: "pointer",
             }}>닫기</button>
           </div>
+        </div>
+      )}
+
+      {/* ─── PWA Install Banner ──────────────────────────────────────── */}
+      {showInstallBanner && (
+        <div style={{
+          position: "fixed", bottom: isMobile ? "80px" : "24px", left: "50%", transform: "translateX(-50%)",
+          background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", borderRadius: "14px",
+          padding: "14px 20px", display: "flex", alignItems: "center", gap: "14px",
+          boxShadow: "0 8px 32px rgba(59,130,246,0.3)", zIndex: 60,
+          width: isMobile ? "calc(100% - 32px)" : "auto", maxWidth: "420px",
+        }}>
+          <div style={{
+            width: "40px", height: "40px", borderRadius: "10px", background: "rgba(255,255,255,0.2)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: "14px", fontWeight: 800, color: "#fff", flexShrink: 0,
+          }}>IV</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: "14px", color: "#fff" }}>앱 설치하기</div>
+            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.8)" }}>홈 화면에 추가하여 더 빠르게 접근</div>
+          </div>
+          <button onClick={handleInstall} style={{
+            padding: "8px 16px", borderRadius: "8px", border: "none",
+            background: "rgba(255,255,255,0.95)", color: "#3b82f6",
+            fontSize: "13px", fontWeight: 700, cursor: "pointer", flexShrink: 0,
+          }}>설치</button>
+          <button onClick={() => setShowInstallBanner(false)} style={{
+            background: "none", border: "none", color: "rgba(255,255,255,0.6)",
+            fontSize: "18px", cursor: "pointer", padding: "0 4px", flexShrink: 0,
+          }}>✕</button>
         </div>
       )}
     </div>

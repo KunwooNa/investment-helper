@@ -1,16 +1,59 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine, Area, ComposedChart } from "recharts";
 
-// ─── Mock Stock Data Generator ────────────────────────────────────────
-function generateStockData(symbol, basePriceInput, days = 60) {
+// ─── API Base URL ─────────────────────────────────────────────────────
+const API_BASE = "/api";
+
+// ─── Fetch real stock history from Yahoo Finance via our API ──────────
+async function fetchStockHistory(symbol) {
+  try {
+    const res = await fetch(`${API_BASE}/history?symbol=${encodeURIComponent(symbol)}&range=3mo&interval=1d`);
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const json = await res.json();
+    const data = (json.history || []).map((d) => {
+      const dt = new Date(d.date);
+      return {
+        date: d.date,
+        dateShort: `${dt.getMonth() + 1}/${dt.getDate()}`,
+        close: d.close,
+        high: d.high,
+        low: d.low,
+        volume: d.volume,
+      };
+    });
+    // Calculate 10-day MA
+    for (let i = 0; i < data.length; i++) {
+      if (i >= 9) {
+        const sum = data.slice(i - 9, i + 1).reduce((a, d) => a + d.close, 0);
+        data[i].ma10 = Math.round((sum / 10) * 100) / 100;
+      }
+    }
+    return { data, meta: { price: json.regularMarketPrice, previousClose: json.previousClose, currency: json.currency } };
+  } catch (err) {
+    console.warn(`Failed to fetch ${symbol}, using mock data:`, err.message);
+    return null; // Will trigger fallback
+  }
+}
+
+// ─── Search stocks via Yahoo Finance ──────────────────────────────────
+async function searchStocks(query) {
+  try {
+    const res = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
+    if (!res.ok) return [];
+    const json = await res.json();
+    return json.results || [];
+  } catch { return []; }
+}
+
+// ─── Mock fallback (for local dev without API) ────────────────────────
+function generateMockData(symbol, basePrice, days = 60) {
   const data = [];
-  let price = basePriceInput;
+  let price = basePrice;
   const now = new Date();
   for (let i = days; i >= 0; i--) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
-    const volatility = (Math.random() - 0.48) * basePriceInput * 0.03;
-    price = Math.max(price + volatility, basePriceInput * 0.7);
+    price = Math.max(price + (Math.random() - 0.48) * basePrice * 0.03, basePrice * 0.7);
     data.push({
       date: date.toISOString().split("T")[0],
       dateShort: `${date.getMonth() + 1}/${date.getDate()}`,
@@ -170,12 +213,34 @@ export default function InvestmentHelper() {
     setPhase("app");
   };
 
-  // ─── Generate data when portfolio changes ───────────────────────
-  useEffect(() => {
+  const [loading, setLoading] = useState(false);
+  const [dataProvider, setDataProvider] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const refreshTimer = useRef(null);
+
+  // ─── Fetch real data from API (with mock fallback) ────────────
+  const loadStockData = useCallback(async () => {
     if (portfolio.length === 0) return;
+    setLoading(true);
+
     const dm = {};
-    portfolio.forEach((s) => { dm[s.symbol] = generateStockData(s.symbol, s.basePrice); });
+    let provider = null;
+    for (const s of portfolio) {
+      const result = await fetchStockHistory(s.symbol);
+      if (result) {
+        dm[s.symbol] = result.data;
+        if (!provider && result.meta) provider = "LIVE";
+      } else {
+        // Fallback to mock data
+        dm[s.symbol] = generateMockData(s.symbol, s.basePrice);
+        if (!provider) provider = "MOCK";
+      }
+    }
+
     setStockDataMap(dm);
+    setDataProvider(provider);
+    setLastUpdate(new Date());
+
     const allAlerts = [];
     portfolio.forEach((s) => {
       const sigs = detectSignals(dm[s.symbol] || []);
@@ -184,7 +249,16 @@ export default function InvestmentHelper() {
     allAlerts.sort((a, b) => b.date.localeCompare(a.date));
     setAlerts(allAlerts);
     if (!selectedStock && portfolio.length > 0) setSelectedStock(portfolio[0].symbol);
+    setLoading(false);
   }, [portfolio]);
+
+  // Load data on portfolio change + auto-refresh every hour
+  useEffect(() => {
+    loadStockData();
+    if (refreshTimer.current) clearInterval(refreshTimer.current);
+    refreshTimer.current = setInterval(loadStockData, 60 * 60 * 1000); // 1 hour
+    return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
+  }, [loadStockData]);
 
   // ─── Portfolio summary ──────────────────────────────────────────
   const summary = useMemo(() => {
@@ -409,11 +483,31 @@ export default function InvestmentHelper() {
           </nav>
         )}
 
-        {/* Edit watchlist button */}
-        <button onClick={() => { setPhase("watchlist"); }} style={{
-          background: "none", border: `1px solid ${T.border}`, borderRadius: "8px",
-          color: T.muted, padding: "6px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
-        }}>관심종목 편집</button>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* Data status indicator */}
+          {dataProvider && (
+            <div onClick={loadStockData} title="클릭하여 새로고침" style={{
+              display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px",
+              borderRadius: "6px", background: dataProvider === "LIVE" ? "rgba(34,197,94,0.1)" : "rgba(234,179,8,0.1)",
+              border: `1px solid ${dataProvider === "LIVE" ? "rgba(34,197,94,0.2)" : "rgba(234,179,8,0.2)"}`,
+              cursor: "pointer", fontSize: "11px", fontWeight: 600,
+              color: dataProvider === "LIVE" ? T.green : T.yellow,
+            }}>
+              <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: dataProvider === "LIVE" ? T.green : T.yellow }} />
+              {loading ? "갱신 중..." : dataProvider === "LIVE" ? "실시간" : "데모"}
+              {lastUpdate && !loading && (
+                <span style={{ color: T.dim, fontWeight: 400, marginLeft: "2px" }}>
+                  {lastUpdate.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              )}
+            </div>
+          )}
+          {/* Edit watchlist button */}
+          <button onClick={() => { setPhase("watchlist"); }} style={{
+            background: "none", border: `1px solid ${T.border}`, borderRadius: "8px",
+            color: T.muted, padding: "6px 12px", fontSize: "12px", fontWeight: 600, cursor: "pointer",
+          }}>관심종목 편집</button>
+        </div>
       </header>
 
       {/* ─── Main content ────────────────────────────────────────────── */}

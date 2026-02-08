@@ -1,6 +1,12 @@
 // Vercel Serverless Function: Fetch current quotes with 3-tier fallback
 // Yahoo Finance → Alpha Vantage → Financial Modeling Prep
-// Usage: /api/quote?symbols=AAPL,MSFT,005930.KS
+// Usage: /api/quote?symbols=AAPL,MSFT,005930
+
+// ─── Normalize Korean stock symbols for Yahoo Finance ────────────
+function yahooSymbol(symbol) {
+  if (/^\d{6}$/.test(symbol)) return `${symbol}.KS`;
+  return symbol;
+}
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -11,8 +17,9 @@ export default async function handler(req, res) {
   if (!symbols) return res.status(400).json({ error: "symbols parameter is required" });
 
   const symbolList = symbols.split(",").map((s) => s.trim());
+  const yahooSymbols = symbolList.map(yahooSymbol);
 
-  let quotes = await tryYahooQuotes(symbolList);
+  let quotes = await tryYahooQuotes(yahooSymbols);
   if (!quotes || quotes.length === 0) quotes = await tryFallbackQuotes(symbolList);
 
   res.setHeader("Cache-Control", "s-maxage=60, stale-while-revalidate=120");

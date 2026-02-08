@@ -2,6 +2,12 @@
 // Yahoo Finance → Alpha Vantage → Financial Modeling Prep
 // Usage: /api/history?symbol=AAPL&range=3mo&interval=1d
 
+// ─── Normalize Korean stock symbols for Yahoo Finance ────────────
+function yahooSymbol(symbol) {
+  if (/^\d{6}$/.test(symbol)) return `${symbol}.KS`;
+  return symbol;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET");
@@ -10,10 +16,12 @@ export default async function handler(req, res) {
   const { symbol, range = "3mo", interval = "1d" } = req.query;
   if (!symbol) return res.status(400).json({ error: "symbol parameter is required" });
 
+  const ySymbol = yahooSymbol(symbol);
+
   // Try providers in order
-  let result = await tryYahoo(symbol, range, interval);
-  if (!result) result = await tryAlphaVantage(symbol);
-  if (!result) result = await tryFMP(symbol);
+  let result = await tryYahoo(ySymbol, range, interval);
+  if (!result) result = await tryAlphaVantage(ySymbol);
+  if (!result) result = await tryFMP(symbol); // FMP uses original symbol
 
   if (!result) {
     return res.status(502).json({ error: "All data providers failed", symbol });

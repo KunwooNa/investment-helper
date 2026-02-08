@@ -201,6 +201,16 @@ export default function InvestmentHelper() {
     });
   };
 
+  // ─── Sync watchlist with native app (for push notifications) ────
+  const syncWithNativeApp = useCallback((symbols) => {
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: "WATCHLIST_UPDATE",
+        watchlist: symbols,
+      }));
+    }
+  }, []);
+
   // ─── Start app with selected stocks ─────────────────────────────
   const startApp = () => {
     if (watchlist.size === 0) return;
@@ -211,6 +221,8 @@ export default function InvestmentHelper() {
     }));
     setPortfolio(selected);
     setPhase("app");
+    // Notify native app about selected watchlist
+    syncWithNativeApp([...watchlist]);
   };
 
   const [loading, setLoading] = useState(false);
@@ -259,6 +271,23 @@ export default function InvestmentHelper() {
     refreshTimer.current = setInterval(loadStockData, 60 * 60 * 1000); // 1 hour
     return () => { if (refreshTimer.current) clearInterval(refreshTimer.current); };
   }, [loadStockData]);
+
+  // ─── Expose functions to native app ────────────────────────────
+  useEffect(() => {
+    // Expose loadStockData for native app to trigger refresh
+    window.loadStockData = loadStockData;
+
+    // Listen for notification taps from native app
+    const handleNativeNavigate = (e) => {
+      const { symbol } = e.detail;
+      if (symbol && portfolio.find((p) => p.symbol === symbol)) {
+        setSelectedStock(symbol);
+        setView("chart");
+      }
+    };
+    window.addEventListener("nativeNavigate", handleNativeNavigate);
+    return () => window.removeEventListener("nativeNavigate", handleNativeNavigate);
+  }, [loadStockData, portfolio]);
 
   // ─── Portfolio summary ──────────────────────────────────────────
   const summary = useMemo(() => {
